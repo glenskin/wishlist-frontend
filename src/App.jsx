@@ -24,17 +24,20 @@ function App() {
     return headers;
   };
 
-  async function apiCall(url, options = {}) {
-    const res = await fetch(`${API_BASE}${url}`, {
-      headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-      ...options
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail);
-    }
-    return res.json();
+async function apiCall(url, options = {}) {
+  const res = await fetch(`${API_BASE}${url}`, {
+    headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+    ...options
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail);
   }
+  return res.json();
+}
+
+
+
 
   async function loadWishlist() {
     try {
@@ -47,37 +50,42 @@ function App() {
     }
   }
 
-  async function login(e) {
-    e.preventDefault();
-    try {
-      const formData = new FormData();
-      formData.append('username', email);
-      formData.append('password', password);
-      const res = await fetch(`${API_BASE}/api/auth/token`, { method: 'POST', body: formData });
-      if (!res.ok) throw new Error('Invalid credentials');
-      const data = await res.json();
-      localStorage.setItem('token', data.access_token);
-      setToken(data.access_token);
-      setShowAuth(false);
-      loadWishlist();
-    } catch (e) {
-      setError(e.message);
-    }
+async function login(e) {
+  e.preventDefault();
+  const formData = new FormData();
+  formData.append('username', email);
+  formData.append('password', password);
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/token`, { method: 'POST', body: formData });
+    if (!res.ok) throw new Error('Неверный email/пароль');
+    const data = await res.json();
+    localStorage.setItem('token', data.access_token);
+    setToken(data.access_token);
+    setShowAuth(false);
+    setError('');
+    // useEffect сам загрузит wishlist
+  } catch (e) {
+    setError(e.message);
   }
+}
+
+
 
   async function register(e) {
-    e.preventDefault();
-    try {
-      await apiCall('/api/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({ email, password })
-      });
-      // ✅ Автологин после регистрации
-      await login(e);
-    } catch (e) {
-      setError(e.message);
-    }
+  e.preventDefault();
+  try {
+    await apiCall('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password })
+    });
+    setError('✅ Зарегистрирован! Теперь Login →');
+    setIsRegister(false);
+  } catch (e) {
+    setError(e.message);
   }
+}
+
+
 
   async function addItem(e) {
     e.preventDefault();
