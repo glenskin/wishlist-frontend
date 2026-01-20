@@ -5,8 +5,8 @@ function App() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [userId, setUserId] = useState(localStorage.getItem('userId'));
-  const [showAuth, setShowAuth] = useState(!userId);
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [showAuth, setShowAuth] = useState(!token);
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -14,9 +14,15 @@ function App() {
   const [editingId, setEditingId] = useState(null);
   const [editItem, setEditItem] = useState({ name: '', quantity: 1, category: '' });
 
-  const API_BASE = 'https://glenskin.ru'; // Поменяй на прод
+  const API_BASE = 'https://glenskin.ru';
 
-  const getHeaders = () => ({ 'X-User-Id': userId });
+  const getHeaders = () => {
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  };
 
   async function apiCall(url, options = {}) {
     const res = await fetch(`${API_BASE}${url}`, {
@@ -32,7 +38,7 @@ function App() {
 
   async function loadWishlist() {
     try {
-      const data = await apiCall('/api/wishlist');
+      const data = await apiCall('/api/');  // ✅ /api/ вместо /wishlist
       setItems(data);
     } catch (e) {
       setError(e.message);
@@ -47,11 +53,11 @@ function App() {
       const formData = new FormData();
       formData.append('username', email);
       formData.append('password', password);
-      const res = await fetch(`${API_BASE}/api/auth/login`, { method: 'POST', body: formData });
+      const res = await fetch(`${API_BASE}/api/auth/token`, { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Invalid credentials');
       const data = await res.json();
-      localStorage.setItem('userId', data.user_id);
-      setUserId(data.user_id);
+      localStorage.setItem('token', data.access_token);
+      setToken(data.access_token);
       setShowAuth(false);
       loadWishlist();
     } catch (e) {
@@ -62,14 +68,12 @@ function App() {
   async function register(e) {
     e.preventDefault();
     try {
-      const data = await apiCall('/api/auth/register', {
+      await apiCall('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({ email, password })
       });
-      localStorage.setItem('userId', data.id);
-      setUserId(data.id);
-      setShowAuth(false);
-      loadWishlist();
+      // ✅ Автологин после регистрации
+      await login(e);
     } catch (e) {
       setError(e.message);
     }
@@ -121,15 +125,15 @@ function App() {
   }
 
   const logout = () => {
-    localStorage.removeItem('userId');
-    setUserId(null);
+    localStorage.removeItem('token');
+    setToken(null);
     setShowAuth(true);
     setItems([]);
   };
 
   useEffect(() => {
-    if (userId) loadWishlist();
-  }, [userId]);
+    if (token) loadWishlist();  // ✅ token вместо userId
+  }, [token]);
 
   if (showAuth) {
     return (
