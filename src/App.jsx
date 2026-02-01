@@ -24,45 +24,102 @@ function App() {
   }
 }
 
-/*const getHeaders = () => {
+
+
+const getHeaders = () => {
   const headers = {};
+  const token = localStorage.getItem('token'); // Берем актуальный токен
+  
   if (token) {
-    const payload = parseJwt(token);
-    headers['X-User-Id'] = payload.sub;  // 17!
+    // Проверяем, не истек ли токен
+    try {
+      const payload = parseJwt(token);
+      const exp = payload.exp * 1000; // Конвертируем в миллисекунды
+      if (Date.now() >= exp) {
+        console.log('Token expired');
+        localStorage.removeItem('token');
+        return headers;
+      }
+    } catch (e) {
+      console.warn('Invalid token:', e);
+      localStorage.removeItem('token');
+      return headers;
+    }
+    
+    headers['Authorization'] = `Bearer ${token}`;
   }
   return headers;
-};*/
+};
 
-  const getHeaders = () => {
-    const headers = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    return headers;
+  // ЗАМЕНИТЕ функцию apiCall (строки 37-57) на:
+async function apiCall(url, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...getHeaders(),
+    ...options.headers,
   };
 
-  async function apiCall(url, options) {
-    const res = await fetch(`${API_BASE}/api/${url}`, {
-      headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-      ...options,
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail);
-    }
-    return res.json();
+  // Убираем дублирование Content-Type
+  if (options.body && typeof options.body === 'string') {
+    headers['Content-Type'] = 'application/json';
   }
 
-  async function loadWishlist() {
-    try {
-      const data = await apiCall('wishlist');
-      setItems(data);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+  const res = await fetch(`${API_BASE}/api/${url}`, {
+    ...options,
+    headers,
+    credentials: 'include',  // Добавляем для CORS с куками
+  });
+
+  console.log(`API ${url}:`, res.status, res.statusText);
+
+  // Если 401 - токен недействителен
+  if (res.status === 401) {
+    localStorage.removeItem('token');
+    setToken(null);
+    setShowAuth(true);
+    throw new Error('Сессия истекла. Войдите снова.');
   }
+
+  if (!res.ok) {
+    const text = await res.text();
+    let detail = 'Ошибка сервера';
+    try {
+      const json = JSON.parse(text);
+      detail = json.detail || json.message || text;
+    } catch {
+      detail = text || res.statusText;
+    }
+    throw new Error(detail);
+  }
+
+  // Если ответ пустой (например, для DELETE)
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    return null;
+  }
+
+  return res.json();
+}
+
+async function loadWishlist() {
+  try {
+    // Пробуем с разными вариантами URL
+    let data;
+    try {
+      data = await apiCall('wishlist/');  // Со слешем
+    } catch (e) {
+      // Если со слешем не работает, пробуем без слеша
+      data = await apiCall('wishlist');
+    }
+    setItems(data);
+  } catch (e) {
+    setError(e.message);
+    if (e.message.includes('401') || e.message.includes('Сессия')) {
+      setShowAuth(true);
+    }
+  } finally {
+    setLoading(false);
+  }
+}
 
   async function login(e) {
     e.preventDefault();
@@ -153,8 +210,13 @@ function App() {
   };
 
   useEffect(() => {
-    if (token) loadWishlist();
-  }, [token]);
+  console.log('Token changed:', token);
+  if (token) {
+    loadWishlist();
+  } else {
+    setLoading(false);
+  }
+}, [token]);
 
   const Footer = () => (
     <footer className="mt-5 pt-4 border-top">
