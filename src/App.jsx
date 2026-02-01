@@ -6,8 +6,10 @@ import AuthForm from './components/AuthForm';
 import LoadingSpinner from './components/LoadingSpinner';
 import Footer from './components/Footer';
 import Header from './components/Header';
-import ItemForm from './components/ItemForm';
-import ItemTable from './components/ItemTable';
+import AddItemModal from './components/AddItemModal';
+import WishlistTable from './components/WishlistTable';
+import EmptyState from './components/EmptyState';
+import './styles/custom.css';
 
 function App() {
   const [items, setItems] = useState([]);
@@ -16,6 +18,7 @@ function App() {
   const [isRegister, setIsRegister] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editItem, setEditItem] = useState({ name: '', quantity: 1, category: '' });
+  const [isModalOpen, setIsModalOpen] = useState(false); // Новое состояние для модалки
 
   const { isAuthenticated, login, logout } = useAuth();
 
@@ -101,6 +104,17 @@ function App() {
     setEditingId(null);
   }
 
+    // Новая функция для добавления товара
+  async function handleAddItem(item) {
+    try {
+      const newItem = await wishlistApi.create(item);
+      setItems([...items, newItem]);
+      setError('');
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
   if (!isAuthenticated) {
     return (
       <div className="min-vh-100 d-flex flex-column">
@@ -134,21 +148,47 @@ function App() {
 
   return (
     <div className="min-vh-100 d-flex flex-column">
-      <div className="container mt-5 flex-grow-1">
-        <Header itemsCount={items.length} onLogout={logout} />
-        {error && <div className="alert alert-danger">{error}</div>}
-        <ItemForm onSubmit={handleAddItem} />
-        <ItemTable
-          items={items}
-          editingId={editingId}
-          editItem={editItem}
-          onStartEdit={startEdit}
-          onCancelEdit={cancelEdit}
-          onUpdateItem={handleUpdateItem}
-          onDeleteItem={handleDeleteItem}
-          setEditItem={setEditItem}
+      <div className="container mt-4 flex-grow-1">
+        <Header 
+          itemsCount={items.length} 
+          onLogout={logout} 
+          onAddClick={() => setIsModalOpen(true)}
         />
+        
+        {error && (
+          <div className="alert alert-danger alert-dismissible fade show">
+            {error}
+            <button 
+              type="button" 
+              className="btn-close" 
+              onClick={() => setError('')}
+            ></button>
+          </div>
+        )}
+        
+        {items.length === 0 ? (
+          <EmptyState onAddClick={() => setIsModalOpen(true)} />
+        ) : (
+          <WishlistTable
+            items={items}
+            editingId={editingId}
+            editItem={editItem}
+            onStartEdit={startEdit}
+            onCancelEdit={cancelEdit}
+            onUpdateItem={handleUpdateItem}
+            onDeleteItem={handleDeleteItem}
+            setEditItem={setEditItem}
+          />
+        )}
       </div>
+      
+      {/* Модальное окно для добавления товара */}
+      <AddItemModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleAddItem}
+      />
+      
       <Footer />
     </div>
   );
